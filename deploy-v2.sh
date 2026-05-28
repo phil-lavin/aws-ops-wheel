@@ -1525,8 +1525,8 @@ Resources:
                   - dynamodb:BatchGetItem
                   - dynamodb:BatchWriteItem
                 Resource:
-                  - !Sub 'arn:aws:dynamodb:${REGION}:${account_id}:table/OpsWheelV2-*-\${Environment}'
-                  - !Sub 'arn:aws:dynamodb:${REGION}:${account_id}:table/OpsWheelV2-*-\${Environment}/index/*'
+                  - !Sub 'arn:aws:dynamodb:*:${account_id}:table/OpsWheelV2-*-\${Environment}'
+                  - !Sub 'arn:aws:dynamodb:*:${account_id}:table/OpsWheelV2-*-\${Environment}/index/*'
         - PolicyName: CognitoAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -1540,7 +1540,7 @@ Resources:
                   - cognito-idp:AdminSetUserPassword
                   - cognito-idp:AdminDeleteUser
                 Resource:
-                  - !Sub 'arn:aws:cognito-idp:${REGION}:${account_id}:userpool/*'
+                  - !Sub 'arn:aws:cognito-idp:*:${account_id}:userpool/*'
 
   # =================== CONFIG LAMBDA ROLE ===================
   ConfigLambdaRole:
