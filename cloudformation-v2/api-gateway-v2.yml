@@ -996,6 +996,68 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${OpsWheelApiV2}/${Environment}/*/app/api/v2/wheel-groups/*/wheels*'
 
+  # =================== AWS WAF (Brute-Force / Abuse Protection) ===================
+
+  ApiWafWebAcl:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: !Sub 'ops-wheel-v2-waf-${Environment}'
+      Scope: REGIONAL
+      DefaultAction:
+        Allow: {}
+      Description: !Sub 'WAF for AWS Ops Wheel v2 API - ${Environment}'
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: !Sub 'OpsWheelV2Waf${Environment}'
+      Rules:
+        # Rule 1: Rate limiting — block IPs exceeding 100 requests per 5 minutes
+        - Name: RateLimitPerIP
+          Priority: 1
+          Action:
+            Block: {}
+          Statement:
+            RateBasedStatement:
+              Limit: 100
+              AggregateKeyType: IP
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: !Sub 'OpsWheelV2RateLimit${Environment}'
+        # Rule 2: AWS Managed — block known malicious IPs (botnets, scanners)
+        - Name: AWSIPReputationList
+          Priority: 2
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesAmazonIpReputationList
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: !Sub 'OpsWheelV2IPReputation${Environment}'
+        # Rule 3: AWS Managed — common attack patterns (SQLi, XSS, etc.)
+        - Name: AWSCommonRuleSet
+          Priority: 3
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: !Sub 'OpsWheelV2CommonRules${Environment}'
+
+  ApiWafAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    DependsOn: ApiStage
+    Properties:
+      WebACLArn: !GetAtt ApiWafWebAcl.Arn
+      ResourceArn: !Sub 'arn:aws:apigateway:${AWS::Region}::/restapis/${OpsWheelApiV2}/stages/${Environment}'
+
 Outputs:
   ApiGatewayId:
     Description: API Gateway ID
