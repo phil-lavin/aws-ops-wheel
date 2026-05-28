@@ -635,19 +635,19 @@ build_and_upload_lambda_functions() {
 validate_templates() {
     log_info "Validating CloudFormation templates..."
     
-    local templates=(
+    # Nested templates are validated from S3 (no 51KB size limit)
+    local nested_templates=(
         "dynamodb-v2.yml"
         "cognito-v2.yml" 
         "lambda-v2.yml"
         "api-gateway-v2.yml"
         "frontend-v2.yml"
-        "awsopswheel-v2.yml"
     )
     
-    for template in "${templates[@]}"; do
+    for template in "${nested_templates[@]}"; do
         if [ -f "cloudformation-v2/$template" ]; then
             log_info "Validating $template..."
-            if aws cloudformation validate-template --template-body "file://cloudformation-v2/$template" --region $REGION > /dev/null; then
+            if aws cloudformation validate-template --template-url "https://${TEMPLATES_BUCKET}.s3.${REGION}.amazonaws.com/templates/$template" --region $REGION > /dev/null; then
                 log_success "✓ $template is valid"
             else
                 log_error "✗ $template validation failed"
@@ -655,6 +655,17 @@ validate_templates() {
             fi
         fi
     done
+    
+    # Parent template is validated locally (not uploaded to S3)
+    if [ -f "cloudformation-v2/awsopswheel-v2.yml" ]; then
+        log_info "Validating awsopswheel-v2.yml..."
+        if aws cloudformation validate-template --template-body "file://cloudformation-v2/awsopswheel-v2.yml" --region $REGION > /dev/null; then
+            log_success "✓ awsopswheel-v2.yml is valid"
+        else
+            log_error "✗ awsopswheel-v2.yml validation failed"
+            exit 1
+        fi
+    fi
 }
 
 # Function to force API Gateway deployment
@@ -1144,6 +1155,12 @@ build_and_upload_frontend() {
                 aws s3 sync ../build/static/ "s3://$bucket_name/app/" --delete --exclude "config.json" --region $REGION
                 log_success "Uploaded fresh frontend build to S3"
                 
+                # Upload robots.txt to bucket root (not under /app/) so crawlers find it at /robots.txt
+                if [ -f "public/robots.txt" ]; then
+                    aws s3 cp public/robots.txt "s3://$bucket_name/robots.txt" --region $REGION
+                    log_success "Uploaded robots.txt"
+                fi
+                
                 # Step 6: Invalidate CloudFront cache to serve fresh content
                 local distribution_id=$(aws cloudformation describe-stacks \
                     --stack-name "$STACK_NAME" \
@@ -1151,7 +1168,7 @@ build_and_upload_frontend() {
                     --query 'Stacks[0].Outputs[?OutputKey==`CloudFrontDistributionId`].OutputValue' \
                     --output text 2>/dev/null || echo "")
                 
-                if [ -n "$distribution_id" ] && [ "$distribution_id" != "None" ]; then
+                if [ -n "$distribution_id" ] && [ "$distribution_id" != "None" ] && [ "$distribution_id" != "N/A" ]; then
                     log_info "Invalidating CloudFront cache for fresh content delivery..."
                     aws cloudfront create-invalidation \
                         --distribution-id "$distribution_id" \
@@ -1643,8 +1660,8 @@ main() {
     cleanup_obsolete_build_files  # Clean up before starting
     validate_security_config      # NEW: Validate security before deployment
     create_templates_bucket
-    validate_templates
     upload_templates
+    validate_templates
     build_and_upload_lambda_layer
     build_and_upload_lambda_functions
     deploy_stack
