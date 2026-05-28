@@ -21,6 +21,16 @@ Parameters:
     Type: String
     Description: ARN of the content-hash based Lambda layer created by deployment script
 
+  LambdaExecutionRoleArn:
+    Type: String
+    Default: ''
+    Description: ARN of a pre-existing Lambda execution role. If empty, the role will be created.
+
+  ConfigLambdaRoleArn:
+    Type: String
+    Default: ''
+    Description: ARN of a pre-existing Config Lambda role. If empty, the role will be created.
+
 Resources:
   # =================== DYNAMODB STACK (No Dependencies) ===================
   DynamoDBStack:
@@ -65,6 +75,7 @@ Resources:
         UserPoolId: !GetAtt CognitoStack.Outputs.UserPoolId
         UserPoolClientId: !GetAtt CognitoStack.Outputs.UserPoolClientId
         UserPoolArn: !GetAtt CognitoStack.Outputs.UserPoolArn
+        LambdaExecutionRoleArn: !Ref LambdaExecutionRoleArn
 
   # =================== API GATEWAY STACK (Depends on Lambda) ===================
   ApiGatewayStack:
@@ -95,6 +106,7 @@ Resources:
         UserPoolId: !GetAtt CognitoStack.Outputs.UserPoolId
         UserPoolClientId: !GetAtt CognitoStack.Outputs.UserPoolClientId
         ForceUpdateTimestamp: !Ref LayerArn
+        ConfigLambdaRoleArn: !Ref ConfigLambdaRoleArn
 
 Outputs:
   # =================== DATABASE OUTPUTS ===================
@@ -187,7 +199,7 @@ Outputs:
       Name: !Sub '${AWS::StackName}-FrontendURL'
 
   CloudFrontDomainName:
-    Description: CloudFront Distribution Domain Name  
+    Description: CloudFront Distribution Domain Name
     Value: !GetAtt FrontendStack.Outputs.CloudFrontDomainName
     Export:
       Name: !Sub '${AWS::StackName}-CloudFrontDomain'
