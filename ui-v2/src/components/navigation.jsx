@@ -95,7 +95,7 @@ class Navigation extends Component {
           <Navbar.Brand className="me-3">
             {NAVIGATION_CONSTANTS.APP_NAME}
           </Navbar.Brand>
-          <LinkContainer to={NAVIGATION_ROUTES.WHEELS} className="navbar-tab-active">
+          <LinkContainer to={NAVIGATION_ROUTES.WHEELS}>
             <Nav.Link eventKey={EVENT_KEYS.WHEELS}>{NAV_LABELS.WHEELS}</Nav.Link>
           </LinkContainer>
           <PermissionGuard permission={REQUIRED_PERMISSIONS.MANAGE_USERS}>
