@@ -914,6 +914,16 @@ def create_wheel_group_public(event, context=None):
       }
     }
     """
+    if os.environ.get('DISABLE_PUBLIC_SIGNUP', 'false').lower() == 'true':
+        return {
+            'statusCode': 403,
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
+            'body': json.dumps({'error': 'Public signup is disabled'})
+        }
+
     body = event.get('body', {})
     
     # Validate required fields

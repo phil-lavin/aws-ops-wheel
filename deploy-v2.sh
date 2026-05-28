@@ -13,6 +13,7 @@ ADMIN_EMAIL=${ADMIN_EMAIL:-admin@example.com}
 DELETE_STACKS=${DELETE_STACKS:-false}
 QUICK_UPDATE=${QUICK_UPDATE:-false}
 NO_IAM=${NO_IAM:-false}
+DISABLE_PUBLIC_SIGNUP=${DISABLE_PUBLIC_SIGNUP:-false}
 LAMBDA_EXECUTION_ROLE_ARN=""
 CONFIG_LAMBDA_ROLE_ARN=""
 
@@ -814,6 +815,7 @@ deploy_stack() {
         "ParameterKey=AdminEmail,ParameterValue=$ADMIN_EMAIL"
         "ParameterKey=TemplatesBucketName,ParameterValue=$TEMPLATES_BUCKET"
         "ParameterKey=LayerArn,ParameterValue=$LAYER_ARN"
+        "ParameterKey=DisablePublicSignup,ParameterValue=$DISABLE_PUBLIC_SIGNUP"
     )
 
     # When --no-iam is set, pass the pre-existing role ARNs to CloudFormation
@@ -1088,7 +1090,8 @@ create_and_upload_config() {
   "UserPoolId": "$cognito_user_pool_id",
   "ClientId": "$cognito_client_id",
   "API_BASE_URL": "$api_url/app/api/v2",
-  "REGION": "$REGION"
+  "REGION": "$REGION",
+  "DISABLE_PUBLIC_SIGNUP": "$DISABLE_PUBLIC_SIGNUP"
 }
 EOF
     
@@ -1734,6 +1737,10 @@ while [[ $# -gt 0 ]]; do
             NO_IAM=true
             shift
             ;;
+        --no-public-signup)
+            DISABLE_PUBLIC_SIGNUP=true
+            shift
+            ;;
         --help|-h)
             echo "AWS Ops Wheel v2 Modular Deployment Script"
             echo ""
@@ -1747,6 +1754,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --delete                 Delete all stacks and empty S3 buckets"
             echo "  --quick-update           Quick app-only update (skip infrastructure)"
             echo "  --no-iam                 Skip IAM role creation; look up pre-existing roles by name"
+            echo "  --no-public-signup       Disable public wheel group creation (self-signup)"
             echo "  -h, --help               Show this help message"
             echo ""
             echo "Environment Variables:"
@@ -1754,6 +1762,7 @@ while [[ $# -gt 0 ]]; do
             echo "  AWS_REGION               Same as --region"
             echo "  ADMIN_EMAIL              Same as --admin-email"
             echo "  ADMIN_USERNAME           Same as --admin-username"
+            echo "  DISABLE_PUBLIC_SIGNUP    Same as --no-public-signup"
             echo ""
             echo "Examples:"
             echo "  $0 --suffix dev --admin-email admin@example.com"

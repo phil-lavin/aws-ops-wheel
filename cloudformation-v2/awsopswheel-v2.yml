@@ -31,6 +31,12 @@ Parameters:
     Default: ''
     Description: ARN of a pre-existing Config Lambda role. If empty, the role will be created.
 
+  DisablePublicSignup:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Disable public wheel group creation (self-signup). Authenticated users can still create wheel groups.
+
 Resources:
   # =================== DYNAMODB STACK (No Dependencies) ===================
   DynamoDBStack:
@@ -76,6 +82,7 @@ Resources:
         UserPoolClientId: !GetAtt CognitoStack.Outputs.UserPoolClientId
         UserPoolArn: !GetAtt CognitoStack.Outputs.UserPoolArn
         LambdaExecutionRoleArn: !Ref LambdaExecutionRoleArn
+        DisablePublicSignup: !Ref DisablePublicSignup
 
   # =================== API GATEWAY STACK (Depends on Lambda) ===================
   ApiGatewayStack:
@@ -107,6 +114,7 @@ Resources:
         UserPoolClientId: !GetAtt CognitoStack.Outputs.UserPoolClientId
         ForceUpdateTimestamp: !Ref LayerArn
         ConfigLambdaRoleArn: !Ref ConfigLambdaRoleArn
+        DisablePublicSignup: !Ref DisablePublicSignup
 
 Outputs:
   # =================== DATABASE OUTPUTS ===================

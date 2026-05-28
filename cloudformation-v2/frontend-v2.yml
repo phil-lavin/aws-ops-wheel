@@ -31,6 +31,11 @@ Parameters:
     Default: ''
     Description: ARN of a pre-existing Config Lambda role. If empty, the role will be created.
 
+  DisablePublicSignup:
+    Type: String
+    Default: 'false'
+    Description: Whether public wheel group creation is disabled
+
 Conditions:
   CreateConfigLambdaRole: !Equals [!Ref ConfigLambdaRoleArn, '']
 
@@ -274,7 +279,8 @@ Resources:
           "ENVIRONMENT": "${Environment}",
           "MULTI_TENANT_ENABLED": true,
           "MAX_MULTI_SELECT": 10,
-          "VERSION": "2.0"
+          "VERSION": "2.0",
+          "DISABLE_PUBLIC_SIGNUP": "${DisablePublicSignup}"
         }
 
 Outputs:

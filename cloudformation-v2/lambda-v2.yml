@@ -78,6 +78,12 @@ Parameters:
     Description: Comma-separated list of deployment admin email addresses
     Default: admin@example.com
 
+  DisablePublicSignup:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Disable public wheel group creation (self-signup)
+
 Conditions:
   CreateLambdaExecutionRole: !Equals [!Ref LambdaExecutionRoleArn, '']
 
@@ -161,6 +167,7 @@ Resources:
           COGNITO_USER_POOL_ID: !Ref UserPoolId
           COGNITO_CLIENT_ID: !Ref UserPoolClientId
           DEPLOYMENT_ADMIN_EMAILS: !Ref AdminEmail
+          DISABLE_PUBLIC_SIGNUP: !Ref DisablePublicSignup
       Code:
         S3Bucket: !Ref TemplatesBucketName
         S3Key: 'index.zip'
