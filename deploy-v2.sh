@@ -12,6 +12,9 @@ ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
 ADMIN_EMAIL=${ADMIN_EMAIL:-admin@example.com}
 DELETE_STACKS=${DELETE_STACKS:-false}
 QUICK_UPDATE=${QUICK_UPDATE:-false}
+NO_IAM=${NO_IAM:-false}
+LAMBDA_EXECUTION_ROLE_ARN=""
+CONFIG_LAMBDA_ROLE_ARN=""
 
 # Colors for output
 RED='\033[0;31m'
@@ -801,6 +804,19 @@ deploy_stack() {
         "ParameterKey=TemplatesBucketName,ParameterValue=$TEMPLATES_BUCKET"
         "ParameterKey=LayerArn,ParameterValue=$LAYER_ARN"
     )
+
+    # When --no-iam is set, pass the pre-existing role ARNs to CloudFormation
+    if [ "$NO_IAM" = true ]; then
+        parameters+=(
+            "ParameterKey=LambdaExecutionRoleArn,ParameterValue=$LAMBDA_EXECUTION_ROLE_ARN"
+            "ParameterKey=ConfigLambdaRoleArn,ParameterValue=$CONFIG_LAMBDA_ROLE_ARN"
+        )
+    fi
+
+    local capabilities="CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND"
+    if [ "$NO_IAM" = true ]; then
+        capabilities="CAPABILITY_AUTO_EXPAND"
+    fi
     
     # Check if stack exists with more robust detection
     log_info "Checking if stack exists: $STACK_NAME"
@@ -841,7 +857,7 @@ deploy_stack() {
                     --stack-name "$STACK_NAME" \
                     --template-body file://cloudformation-v2/awsopswheel-v2.yml \
                     --parameters "${parameters[@]}" \
-                    --capabilities CAPABILITY_NAMED_IAM \
+                    --capabilities $capabilities \
                     --region $REGION
                 
                 log_info "Waiting for stack update to complete..."
@@ -860,7 +876,7 @@ deploy_stack() {
             --stack-name "$STACK_NAME" \
             --template-body file://cloudformation-v2/awsopswheel-v2.yml \
             --parameters "${parameters[@]}" \
-            --capabilities CAPABILITY_NAMED_IAM \
+            --capabilities $capabilities \
             --region $REGION
         
         log_info "Waiting for stack creation to complete..."
@@ -1401,6 +1417,189 @@ quick_update() {
     log_success "Frontend: $frontend_url"
 }
 
+# Tag used to identify pre-created IAM roles for --no-iam mode
+IAM_TAG_KEY="ops-wheel-v2-role"
+
+# Look up a pre-existing IAM role by name
+# Usage: lookup_role_by_name <role_name> <description>
+# Sets the global variable FOUND_ROLE_ARN on success
+lookup_role_by_name() {
+    local role_name="$1"
+    local description="$2"
+    FOUND_ROLE_ARN=""
+
+    log_info "Looking for $description: $role_name ..."
+
+    local role_arn
+    role_arn=$(aws iam get-role \
+        --role-name "$role_name" \
+        --query "Role.Arn" \
+        --output text 2>/dev/null) || {
+        log_warning "Role not found: $role_name"
+        return 1
+    }
+
+    if [ -n "$role_arn" ] && [ "$role_arn" != "None" ]; then
+        FOUND_ROLE_ARN="$role_arn"
+        log_success "Found role: $FOUND_ROLE_ARN"
+        return 0
+    fi
+
+    log_warning "Role not found: $role_name"
+    return 1
+}
+
+# Output CloudFormation YAML to create the required IAM roles, then exit
+emit_iam_cloudformation() {
+    local account_id
+    account_id=$(aws sts get-caller-identity --query Account --output text)
+
+    echo
+    log_error "Required IAM roles not found. Please have an IAM administrator create them"
+    log_error "using the CloudFormation template below, then re-run with --no-iam."
+    echo
+    echo "-----BEGIN CLOUDFORMATION TEMPLATE-----"
+    cat <<CFEOF
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Pre-created IAM roles for AWS Ops Wheel v2 (--no-iam mode)'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: ${SUFFIX}
+    Description: Must match the --suffix used in deploy-v2.sh
+
+Resources:
+  # =================== LAMBDA EXECUTION ROLE ===================
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'OpsWheelV2-LambdaExecutionRole-\${Environment}'
+      Tags:
+        - Key: ${IAM_TAG_KEY}
+          Value: !Sub 'lambda-execution-\${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:BatchGetItem
+                  - dynamodb:BatchWriteItem
+                Resource:
+                  - !Sub 'arn:aws:dynamodb:${REGION}:${account_id}:table/OpsWheelV2-*-\${Environment}'
+                  - !Sub 'arn:aws:dynamodb:${REGION}:${account_id}:table/OpsWheelV2-*-\${Environment}/index/*'
+        - PolicyName: CognitoAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cognito-idp:AdminGetUser
+                  - cognito-idp:AdminUpdateUserAttributes
+                  - cognito-idp:ListUsers
+                  - cognito-idp:AdminCreateUser
+                  - cognito-idp:AdminSetUserPassword
+                  - cognito-idp:AdminDeleteUser
+                Resource:
+                  - !Sub 'arn:aws:cognito-idp:${REGION}:${account_id}:userpool/*'
+
+  # =================== CONFIG LAMBDA ROLE ===================
+  ConfigLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'OpsWheelV2-ConfigLambdaRole-\${Environment}'
+      Tags:
+        - Key: ${IAM_TAG_KEY}
+          Value: !Sub 'config-lambda-\${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3WritePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource:
+                  - !Sub 'arn:aws:s3:::*ops-wheel-v2*\${Environment}*/*'
+
+Outputs:
+  LambdaExecutionRoleArn:
+    Description: Lambda execution role ARN — pass to deploy-v2.sh via --no-iam
+    Value: !GetAtt LambdaExecutionRole.Arn
+  ConfigLambdaRoleArn:
+    Description: Config Lambda role ARN — pass to deploy-v2.sh via --no-iam
+    Value: !GetAtt ConfigLambdaRole.Arn
+CFEOF
+    echo "-----END CLOUDFORMATION TEMPLATE-----"
+    echo
+    log_info "Save the above as a .yml file and deploy it with an IAM-privileged account:"
+    log_info "  aws cloudformation deploy \\"
+    log_info "    --template-file ops-wheel-iam-roles.yml \\"
+    log_info "    --stack-name ops-wheel-v2-iam-${SUFFIX} \\"
+    log_info "    --capabilities CAPABILITY_NAMED_IAM \\"
+    log_info "    --parameter-overrides Environment=${SUFFIX} \\"
+    log_info "    --region ${REGION}"
+    echo
+    exit 1
+}
+
+# Resolve IAM roles when --no-iam is set
+resolve_no_iam_roles() {
+    log_info "--no-iam mode: looking up pre-existing IAM roles by name..."
+    echo
+
+    local LAMBDA_EXEC_ROLE_NAME="OpsWheelV2-LambdaExecutionRole-${SUFFIX}"
+    local CONFIG_LAMBDA_ROLE_NAME="OpsWheelV2-ConfigLambdaRole-${SUFFIX}"
+    local missing=false
+
+    if lookup_role_by_name "$LAMBDA_EXEC_ROLE_NAME" "Lambda Execution Role"; then
+        LAMBDA_EXECUTION_ROLE_ARN="$FOUND_ROLE_ARN"
+    else
+        missing=true
+    fi
+
+    if lookup_role_by_name "$CONFIG_LAMBDA_ROLE_NAME" "Config Lambda Role"; then
+        CONFIG_LAMBDA_ROLE_ARN="$FOUND_ROLE_ARN"
+    else
+        missing=true
+    fi
+
+    if [ "$missing" = true ]; then
+        emit_iam_cloudformation
+    fi
+
+    log_success "All IAM roles resolved for --no-iam mode"
+    log_info "  Lambda Execution Role: $LAMBDA_EXECUTION_ROLE_ARN"
+    log_info "  Config Lambda Role:    $CONFIG_LAMBDA_ROLE_ARN"
+    echo
+}
+
 # Main execution
 main() {
     # Check if quick update was requested
@@ -1438,6 +1637,9 @@ main() {
     
     # Execute deployment steps
     check_aws_config
+    if [ "$NO_IAM" = true ]; then
+        resolve_no_iam_roles
+    fi
     cleanup_obsolete_build_files  # Clean up before starting
     validate_security_config      # NEW: Validate security before deployment
     create_templates_bucket
@@ -1511,6 +1713,10 @@ while [[ $# -gt 0 ]]; do
             QUICK_UPDATE=true
             shift
             ;;
+        --no-iam)
+            NO_IAM=true
+            shift
+            ;;
         --help|-h)
             echo "AWS Ops Wheel v2 Modular Deployment Script"
             echo ""
@@ -1523,6 +1729,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --admin-username USER     Admin username [default: admin or auto-generated from email]"
             echo "  --delete                 Delete all stacks and empty S3 buckets"
             echo "  --quick-update           Quick app-only update (skip infrastructure)"
+            echo "  --no-iam                 Skip IAM role creation; look up pre-existing roles by name"
             echo "  -h, --help               Show this help message"
             echo ""
             echo "Environment Variables:"

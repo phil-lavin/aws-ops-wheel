@@ -7,6 +7,11 @@ Parameters:
     Default: dev
     Description: Deployment suffix for naming resources
 
+  LambdaExecutionRoleArn:
+    Type: String
+    Default: ''
+    Description: ARN of a pre-existing Lambda execution role. If empty, the role will be created.
+
   # Templates Bucket Parameter
   TemplatesBucketName:
     Type: String
@@ -73,11 +78,15 @@ Parameters:
     Description: Comma-separated list of deployment admin email addresses
     Default: admin@example.com
 
+Conditions:
+  CreateLambdaExecutionRole: !Equals [!Ref LambdaExecutionRoleArn, '']
+
 Resources:
   # =================== LAMBDA EXECUTION ROLE ===================
 
   LambdaExecutionRole:
     Type: AWS::IAM::Role
+    Condition: CreateLambdaExecutionRole
     Properties:
       RoleName: !Sub 'OpsWheelV2-LambdaExecutionRole-${Environment}'
       AssumeRolePolicyDocument:
@@ -137,7 +146,7 @@ Resources:
       FunctionName: !Sub 'ops-wheel-v2-tenant-management-${Environment}'
       Runtime: python3.10
       Handler: index.lambda_handler
-      Role: !GetAtt LambdaExecutionRole.Arn
+      Role: !If [CreateLambdaExecutionRole, !GetAtt LambdaExecutionRole.Arn, !Ref LambdaExecutionRoleArn]
       Timeout: 30
       MemorySize: 256
       Layers:
@@ -162,7 +171,7 @@ Resources:
       FunctionName: !Sub 'ops-wheel-v2-wheel-operations-${Environment}'
       Runtime: python3.10
       Handler: index.lambda_handler
-      Role: !GetAtt LambdaExecutionRole.Arn
+      Role: !If [CreateLambdaExecutionRole, !GetAtt LambdaExecutionRole.Arn, !Ref LambdaExecutionRoleArn]
       Timeout: 30
       MemorySize: 256
       Layers:
@@ -186,7 +195,7 @@ Resources:
       FunctionName: !Sub 'ops-wheel-v2-participant-operations-${Environment}'
       Runtime: python3.10
       Handler: index.lambda_handler
-      Role: !GetAtt LambdaExecutionRole.Arn
+      Role: !If [CreateLambdaExecutionRole, !GetAtt LambdaExecutionRole.Arn, !Ref LambdaExecutionRoleArn]
       Timeout: 30
       MemorySize: 256
       Layers:
@@ -210,7 +219,7 @@ Resources:
       FunctionName: !Sub 'ops-wheel-v2-selection-algorithms-${Environment}'
       Runtime: python3.10
       Handler: index.lambda_handler
-      Role: !GetAtt LambdaExecutionRole.Arn
+      Role: !If [CreateLambdaExecutionRole, !GetAtt LambdaExecutionRole.Arn, !Ref LambdaExecutionRoleArn]
       Timeout: 30
       MemorySize: 256
       Layers:
@@ -234,7 +243,7 @@ Resources:
       FunctionName: !Sub 'ops-wheel-v2-api-authorizer-${Environment}'
       Runtime: python3.10
       Handler: authorizer_index.lambda_handler
-      Role: !GetAtt LambdaExecutionRole.Arn
+      Role: !If [CreateLambdaExecutionRole, !GetAtt LambdaExecutionRole.Arn, !Ref LambdaExecutionRoleArn]
       Timeout: 30
       MemorySize: 256
       Layers:
@@ -254,7 +263,7 @@ Resources:
 Outputs:
   LambdaExecutionRoleArn:
     Description: Lambda execution role ARN
-    Value: !GetAtt LambdaExecutionRole.Arn
+    Value: !If [CreateLambdaExecutionRole, !GetAtt LambdaExecutionRole.Arn, !Ref LambdaExecutionRoleArn]
     Export:
       Name: !Sub '${AWS::StackName}-LambdaExecutionRoleArn'
 

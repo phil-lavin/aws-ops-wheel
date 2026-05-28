@@ -26,6 +26,14 @@ Parameters:
     Default: '1'
     Description: Timestamp parameter to force nested stack updates
 
+  ConfigLambdaRoleArn:
+    Type: String
+    Default: ''
+    Description: ARN of a pre-existing Config Lambda role. If empty, the role will be created.
+
+Conditions:
+  CreateConfigLambdaRole: !Equals [!Ref ConfigLambdaRoleArn, '']
+
 Resources:
   # =================== FRONTEND S3 + CLOUDFRONT ===================
 
@@ -196,7 +204,7 @@ Resources:
       FunctionName: !Sub 'create-frontend-config-${Environment}'
       Runtime: python3.10
       Handler: index.lambda_handler
-      Role: !GetAtt ConfigLambdaRole.Arn
+      Role: !If [CreateConfigLambdaRole, !GetAtt ConfigLambdaRole.Arn, !Ref ConfigLambdaRoleArn]
       Code:
         ZipFile: |
           import boto3
@@ -229,6 +237,7 @@ Resources:
   # IAM Role for Config Lambda
   ConfigLambdaRole:
     Type: AWS::IAM::Role
+    Condition: CreateConfigLambdaRole
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
