@@ -83,6 +83,7 @@ Resources:
         UserPoolArn: !GetAtt CognitoStack.Outputs.UserPoolArn
         LambdaExecutionRoleArn: !Ref LambdaExecutionRoleArn
         DisablePublicSignup: !Ref DisablePublicSignup
+        AdminEmail: !Ref AdminEmail
 
   # =================== API GATEWAY STACK (Depends on Lambda) ===================
   ApiGatewayStack:
