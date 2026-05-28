@@ -195,7 +195,7 @@ class Login extends Component {
               {LOGIN_MESSAGES.LOGIN_BUTTON}
             </Button>
 
-            {this.state.passwordChangeAttributes === undefined && (
+            {this.state.passwordChangeAttributes === undefined && !this.props.disablePublicSignup && (
               <Button
                 className="flex-fill"
                 size={FORM_CONFIG.CONTROL_SIZE}

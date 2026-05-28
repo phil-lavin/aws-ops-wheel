@@ -135,7 +135,8 @@ class App extends Component {
       userHasAuthenticated: this.refreshSession,
       userPool: this.createUserPool(config),
       userLogout: this.userLogout,
-      onCreateTenant: this.handleShowTenantCreation
+      onCreateTenant: this.handleShowTenantCreation,
+      disablePublicSignup: config.DISABLE_PUBLIC_SIGNUP === 'true'
     };
   }
 
@@ -170,14 +171,18 @@ class App extends Component {
   }
 
   renderUnauthenticatedRoutes = () => {
+    const config = this.props.configFetch.value;
+    const publicSignupDisabled = config && config.DISABLE_PUBLIC_SIGNUP === 'true';
     return (
       <Switch>
-        <Route path={ROUTES.CREATE_WHEEL_GROUP} exact={true} render={() => (
-          <WheelGroupCreation 
-            onWheelGroupCreated={this.handleWheelGroupCreated}
-            onBackToLogin={this.handleBackToLogin}
-          />
-        )} />
+        {!publicSignupDisabled && (
+          <Route path={ROUTES.CREATE_WHEEL_GROUP} exact={true} render={() => (
+            <WheelGroupCreation 
+              onWheelGroupCreated={this.handleWheelGroupCreated}
+              onBackToLogin={this.handleBackToLogin}
+            />
+          )} />
+        )}
         <Route path="/forgot-password" exact={true} render={() => (
           <ForgotPassword {...this.getChildProps()} />
         )} />
