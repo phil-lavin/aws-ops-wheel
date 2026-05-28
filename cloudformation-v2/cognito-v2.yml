@@ -67,6 +67,8 @@ Resources:
       WriteAttributes:
         - email
         - name
+        - custom:wheel_group_id
+        - custom:deployment_admin
       TokenValidityUnits:
         IdToken: hours
         AccessToken: hours
