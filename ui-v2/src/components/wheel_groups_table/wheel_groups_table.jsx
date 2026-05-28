@@ -15,6 +15,7 @@
 
 import React, { Component } from 'react';
 import { Card, Table, Button, Alert } from 'react-bootstrap';
+import { Link } from 'react-router-dom';
 import connect from 'react-redux-fetch';
 import DeleteWheelGroupModal from '../user_table/delete_wheel_group_modal';
 import { apiURL, getAuthHeaders, formatDateTime } from '../../util';
@@ -239,12 +240,16 @@ export class WheelGroupsTable extends Component {
                     Manage all wheel groups in the system
                   </small>
                 </div>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={this.fetchWheelGroups}
-                  disabled={this.state.loading}
-                >
+                <div className="d-flex gap-2">
+                  <Link to="/app/createtenant">
+                    <Button variant="success" size="sm">Create Wheel Group</Button>
+                  </Link>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={this.fetchWheelGroups}
+                    disabled={this.state.loading}
+                  >
                   {this.state.loading ? (
                     <>
                       <span className="spinner-border spinner-border-sm me-1" />
@@ -253,7 +258,8 @@ export class WheelGroupsTable extends Component {
                   ) : (
                     'Refresh'
                   )}
-                </Button>
+                  </Button>
+                </div>
               </div>
             </Card.Header>
 

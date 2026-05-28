@@ -277,6 +277,11 @@ const AuthenticatedApp = React.memo(({ childProps, handleClickCapture }) => {
           <Route path={ROUTES.WHEEL_GROUPS} exact={true} render={() => 
             isDeploymentAdmin ? <WheelGroupsTable /> : <div>Access denied</div>
           } />
+          {isDeploymentAdmin && childProps.disablePublicSignup && (
+            <Route path={ROUTES.CREATE_WHEEL_GROUP} exact={true} render={() => 
+              <WheelGroupCreation isAdmin={true} />
+            } />
+          )}
           
           {/* Regular User Routes - no cross-redirects */}
           <Route path={ROUTES.WHEELS} exact={true} render={(props) => 
