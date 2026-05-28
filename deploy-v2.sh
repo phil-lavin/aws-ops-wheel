@@ -925,12 +925,8 @@ create_deployment_admin_user() {
         return 1
     fi
     
-    # Generate a random temporary password (16 chars: upper, lower, digits, special)
-    local temp_password=$(LC_ALL=C tr -dc 'A-Za-z0-9!@#$%^&*' < /dev/urandom | head -c 16)
-    # Ensure password meets Cognito complexity requirements (upper, lower, digit, special)
-    temp_password="${temp_password:0:12}A1a!"
-    # Store for display in show_outputs
-    GENERATED_ADMIN_PASSWORD="$temp_password"
+    # Password will only be generated if creating a new user
+    GENERATED_ADMIN_PASSWORD=""
     
     # Determine if admin email/username were explicitly provided (not defaults)
     local admin_email_provided=false
@@ -1023,6 +1019,12 @@ create_deployment_admin_user() {
     else
         # Create new user
         log_info "Creating new deployment admin user: $admin_username ($ADMIN_EMAIL)"
+        
+        # Generate a random temporary password (16 chars: upper, lower, digits, special)
+        local temp_password=$(LC_ALL=C tr -dc 'A-Za-z0-9!@#$%^&*' < /dev/urandom | head -c 16)
+        # Ensure password meets Cognito complexity requirements (upper, lower, digit, special)
+        temp_password="${temp_password:0:12}A1a!"
+        GENERATED_ADMIN_PASSWORD="$temp_password"
         
         aws cognito-idp admin-create-user \
             --user-pool-id "$user_pool_id" \
@@ -1700,8 +1702,12 @@ main() {
     log_info "=== Deployment Admin Credentials ==="
     log_success "Username: ${FINAL_ADMIN_USERNAME:-$ADMIN_USERNAME}"
     log_success "Email: $ADMIN_EMAIL"
-    log_success "Temporary Password: $GENERATED_ADMIN_PASSWORD"
-    log_warning "⚠️  IMPORTANT: You will be prompted to change this password on first login"
+    if [ -n "$GENERATED_ADMIN_PASSWORD" ]; then
+        log_success "Temporary Password: $GENERATED_ADMIN_PASSWORD"
+        log_warning "⚠️  IMPORTANT: You will be prompted to change this password on first login"
+    else
+        log_info "User already exists — password unchanged"
+    fi
     log_warning "⚠️  The deployment admin will see the admin dashboard automatically after login"
     echo
 }
