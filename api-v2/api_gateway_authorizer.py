@@ -228,7 +228,8 @@ def generate_policy(principal_id, effect, resource, context=None):
             'user_id': str(context.get('user_id', '')),
             'role': str(context.get('role', '')),
             'wheel_group_name': str(context.get('wheel_group_name', '')),
-            'deployment_admin': str(context.get('deployment_admin', 'false'))
+            'deployment_admin': str(context.get('deployment_admin', 'false')),
+            'email': str(context.get('email', ''))
         }
     
     return auth_response

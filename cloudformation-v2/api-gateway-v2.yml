@@ -8,6 +8,10 @@ Parameters:
   ForceUpdateTimestamp:
     Type: String
     Default: '1'
+  DisablePublicSignup:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
   TenantManagementFunctionArn:
     Type: String
   WheelOperationsFunctionArn:
@@ -19,6 +23,8 @@ Parameters:
   ApiAuthorizerFunctionArn:
     Type: String
 
+Conditions:
+  PublicSignupDisabled: !Equals [!Ref DisablePublicSignup, 'true']
 
 Resources:
   OpsWheelApiV2:
@@ -130,7 +136,8 @@ Resources:
       RestApiId: !Ref OpsWheelApiV2
       ResourceId: !Ref WheelGroupCreatePublicResource
       HttpMethod: POST
-      AuthorizationType: NONE
+      AuthorizationType: !If [PublicSignupDisabled, CUSTOM, NONE]
+      AuthorizerId: !If [PublicSignupDisabled, !Ref LambdaAuthorizer, !Ref 'AWS::NoValue']
       Integration: {Type: AWS_PROXY, IntegrationHttpMethod: POST, Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${TenantManagementFunctionArn}/invocations'}
   WheelGroupCreatePublicOptionsMethod:
     Type: AWS::ApiGateway::Method

@@ -898,10 +898,36 @@ def delete_wheel_group_user(event, context=None):
         }
 
 
+def _is_deployment_admin(event):
+    """
+    Check if the request was made by a deployment admin via the API Gateway authorizer context.
+    When public signup is disabled, the API Gateway authorizer is enabled on this endpoint,
+    so the authorizer context will be populated.
+    """
+    authorizer_context = event.get('requestContext', {}).get('authorizer', {})
+    if str(authorizer_context.get('deployment_admin', '')).lower() != 'true':
+        return False
+
+    # Verify email against admin list
+    admin_emails_raw = os.environ.get('DEPLOYMENT_ADMIN_EMAILS', '')
+    if admin_emails_raw:
+        admin_emails = [e.strip().lower() for e in admin_emails_raw.split(',') if e.strip()]
+        user_email = authorizer_context.get('email', '').strip().lower()
+        if user_email not in admin_emails:
+            logger.warning(f"Deployment admin flag set but email {user_email} not in DEPLOYMENT_ADMIN_EMAILS")
+            return False
+
+    return True
+
+
 @handle_api_exceptions
 def create_wheel_group_public(event, context=None):
     """
-    Create a new wheel group (public registration without authentication)
+    Create a new wheel group.
+    
+    When DISABLE_PUBLIC_SIGNUP is false: public registration without authentication.
+    When DISABLE_PUBLIC_SIGNUP is true: only deployment admins can create wheel groups
+    (enforced by API Gateway authorizer).
     
     POST /v2/wheel-group/create-public
     
@@ -915,14 +941,15 @@ def create_wheel_group_public(event, context=None):
     }
     """
     if os.environ.get('DISABLE_PUBLIC_SIGNUP', 'false').lower() == 'true':
-        return {
-            'statusCode': 403,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
-            },
-            'body': json.dumps({'error': 'Public signup is disabled'})
-        }
+        if not _is_deployment_admin(event):
+            return {
+                'statusCode': 403,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
+                'body': json.dumps({'error': 'Public signup is disabled. Only deployment admins can create wheel groups.'})
+            }
 
     body = event.get('body', {})
     

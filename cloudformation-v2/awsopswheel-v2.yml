@@ -99,6 +99,7 @@ Resources:
         ParticipantOperationsFunctionArn: !GetAtt LambdaStack.Outputs.ParticipantOperationsFunctionArn
         SelectionAlgorithmsFunctionArn: !GetAtt LambdaStack.Outputs.SelectionAlgorithmsFunctionArn
         ApiAuthorizerFunctionArn: !GetAtt LambdaStack.Outputs.ApiAuthorizerFunctionArn
+        DisablePublicSignup: !Ref DisablePublicSignup
 
   # =================== FRONTEND STACK (Depends on API Gateway + Cognito) ===================
   FrontendStack:

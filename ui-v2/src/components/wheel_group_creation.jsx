@@ -17,7 +17,7 @@ import React, { Component } from "react";
 import PropTypes from "prop-types";
 import { Alert, Button, Form, Container, Row, Col } from "react-bootstrap";
 import { withRouter } from 'react-router-dom';
-import { apiURL } from "../util";
+import { apiURL, getAuthHeaders } from "../util";
 
 // Wheel Group Creation Component Constants
 const WHEEL_GROUP_CREATION_CONFIG = {
@@ -79,7 +79,8 @@ const WHEEL_GROUP_CREATION_STYLES = {
 // PropTypes definitions
 const WHEEL_GROUP_CREATION_PROP_TYPES = {
   onWheelGroupCreated: PropTypes.func,
-  onBackToLogin: PropTypes.func
+  onBackToLogin: PropTypes.func,
+  isAdmin: PropTypes.bool
 };
 
 class WheelGroupCreation extends Component {
@@ -136,11 +137,14 @@ class WheelGroupCreation extends Component {
     this.setState({ isInFlight: true, error: undefined });
 
     try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (this.props.isAdmin) {
+        Object.assign(headers, getAuthHeaders());
+      }
+
       const response = await fetch(`${apiURL('wheel-group/create-public')}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           wheel_group_name: this.state.wheelGroupName,
           admin_user: {
@@ -158,17 +162,23 @@ class WheelGroupCreation extends Component {
       }
 
       // Wheel group created successfully
+      const successMessage = this.props.isAdmin
+        ? `Wheel group "${this.state.wheelGroupName}" created successfully with admin user "${this.state.username}".`
+        : `Wheel group "${this.state.wheelGroupName}" created successfully! Use username "${this.state.username}" to log in.`;
+      
       this.setState({ 
         isInFlight: false,
         error: { 
-          message: `Wheel group "${this.state.wheelGroupName}" created successfully! Use username "${this.state.username}" to log in.`,
+          message: successMessage,
           isSuccess: true 
         }
       });
       
-      // Redirect to login after a short delay
+      // Redirect after a short delay
       setTimeout(() => {
-        if (this.props.onWheelGroupCreated) {
+        if (this.props.isAdmin) {
+          this.props.history.push('/app/wheelgroups');
+        } else if (this.props.onWheelGroupCreated) {
           this.props.onWheelGroupCreated(result, {
             email: this.state.email,
             password: this.state.password
@@ -269,9 +279,9 @@ class WheelGroupCreation extends Component {
                   size={FORM_CONFIG.CONTROL_SIZE}
                   variant="outline-secondary"
                   disabled={isInFlight}
-                  onClick={() => this.props.history.push('/')}
+                  onClick={() => this.props.history.push(this.props.isAdmin ? '/app/wheelgroups' : '/')}
                 >
-                  {WHEEL_GROUP_CREATION_MESSAGES.BACK_TO_LOGIN}
+                  {this.props.isAdmin ? 'Back to Wheel Groups' : WHEEL_GROUP_CREATION_MESSAGES.BACK_TO_LOGIN}
                 </Button>
               </form>
             </div>
