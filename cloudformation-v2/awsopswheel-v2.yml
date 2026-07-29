@@ -37,6 +37,25 @@ Parameters:
     AllowedValues: ['true', 'false']
     Description: Disable public wheel group creation (self-signup). Authenticated users can still create wheel groups.
 
+  # Custom domain / TLS. Supplied at deploy time (not hardcoded - public repo).
+  CustomDomainName:
+    Type: String
+    Default: ''
+    Description: Optional custom domain (CNAME alias) for CloudFront. When set with
+                 AcmCertificateArn, the distribution serves this domain and enforces TLS 1.2+.
+
+  AcmCertificateArn:
+    Type: String
+    Default: ''
+    Description: ARN of an ACM certificate (in us-east-1) covering CustomDomainName.
+                 Provisioned by the deploy script's certificate stack.
+
+  HostedZoneId:
+    Type: String
+    Default: ''
+    Description: Optional Route53 hosted zone ID in which to create the alias record
+                 for CustomDomainName.
+
 Resources:
   # =================== DYNAMODB STACK (No Dependencies) ===================
   DynamoDBStack:
@@ -117,6 +136,9 @@ Resources:
         ForceUpdateTimestamp: !Ref LayerArn
         ConfigLambdaRoleArn: !Ref ConfigLambdaRoleArn
         DisablePublicSignup: !Ref DisablePublicSignup
+        CustomDomainName: !Ref CustomDomainName
+        AcmCertificateArn: !Ref AcmCertificateArn
+        HostedZoneId: !Ref HostedZoneId
 
 Outputs:
   # =================== DATABASE OUTPUTS ===================

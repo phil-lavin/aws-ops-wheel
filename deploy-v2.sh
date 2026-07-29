@@ -16,6 +16,13 @@ NO_IAM=${NO_IAM:-false}
 DISABLE_PUBLIC_SIGNUP=${DISABLE_PUBLIC_SIGNUP:-false}
 LAMBDA_EXECUTION_ROLE_ARN=""
 CONFIG_LAMBDA_ROLE_ARN=""
+# Custom domain / TLS. When DOMAIN_NAME is set, the script provisions an ACM
+# certificate (DNS-validated) in us-east-1 and wires the CloudFront distribution
+# to serve that domain with a minimum TLS version of 1.2.
+DOMAIN_NAME=${DOMAIN_NAME:-}
+HOSTED_ZONE_ID=${HOSTED_ZONE_ID:-}
+CERT_REGION="us-east-1"   # CloudFront only uses ACM certs from us-east-1
+ACM_CERT_ARN=""
 
 # Colors for output
 RED='\033[0;31m'
@@ -699,6 +706,78 @@ force_api_gateway_deployment() {
     fi
 }
 
+# Discover the public Route53 hosted zone id that owns a domain
+# (longest matching zone-name suffix). Echoes the bare zone id on success.
+discover_hosted_zone_id() {
+    local domain="$1"
+    local zones
+    zones=$(aws route53 list-hosted-zones \
+        --query 'HostedZones[?Config.PrivateZone==`false`].[Id,Name]' \
+        --output text 2>/dev/null || echo "")
+    [ -z "$zones" ] && return 1
+
+    local best_id="" best_len=0 zid zname z len
+    while IFS=$'\t' read -r zid zname; do
+        [ -z "$zname" ] && continue
+        z="${zname%.}"  # strip trailing dot
+        if [ "$domain" = "$z" ] || [[ "$domain" == *".$z" ]]; then
+            len=${#z}
+            if [ "$len" -gt "$best_len" ]; then
+                best_len=$len
+                best_id="${zid#/hostedzone/}"
+            fi
+        fi
+    done <<< "$zones"
+
+    [ -n "$best_id" ] && { echo "$best_id"; return 0; }
+    return 1
+}
+
+# Provision (or reuse) the ACM certificate for DOMAIN_NAME in us-east-1 via a
+# dedicated CloudFormation stack, then read its ARN into ACM_CERT_ARN.
+provision_certificate() {
+    local cert_stack="aws-ops-wheel-v2-cert-${SUFFIX}"
+    log_info "Provisioning ACM certificate for '$DOMAIN_NAME' in $CERT_REGION (stack: $cert_stack)"
+    log_info "DNS validation records are created automatically in zone $HOSTED_ZONE_ID; this can take a few minutes on first issue..."
+
+    aws cloudformation deploy \
+        --template-file cloudformation-v2/certificate-v2.yml \
+        --stack-name "$cert_stack" \
+        --parameter-overrides "DomainName=$DOMAIN_NAME" "HostedZoneId=$HOSTED_ZONE_ID" \
+        --region "$CERT_REGION" \
+        --no-fail-on-empty-changeset
+
+    ACM_CERT_ARN=$(aws cloudformation describe-stacks \
+        --stack-name "$cert_stack" \
+        --region "$CERT_REGION" \
+        --query 'Stacks[0].Outputs[?OutputKey==`CertificateArn`].OutputValue' \
+        --output text 2>/dev/null || echo "")
+
+    if [ -z "$ACM_CERT_ARN" ] || [ "$ACM_CERT_ARN" = "None" ]; then
+        log_error "Failed to obtain certificate ARN from stack: $cert_stack"
+        exit 1
+    fi
+    log_success "Certificate ready: $ACM_CERT_ARN"
+}
+
+# Resolve the custom-domain prerequisites (hosted zone + certificate) when a
+# domain was requested. No-op otherwise.
+setup_custom_domain() {
+    [ -z "$DOMAIN_NAME" ] && return 0
+
+    if [ -z "$HOSTED_ZONE_ID" ]; then
+        log_info "Discovering Route53 hosted zone for '$DOMAIN_NAME'..."
+        HOSTED_ZONE_ID=$(discover_hosted_zone_id "$DOMAIN_NAME") || {
+            log_error "Could not find a public Route53 hosted zone for '$DOMAIN_NAME'"
+            log_error "Pass one explicitly with --hosted-zone-id <ZONE_ID>"
+            exit 1
+        }
+        log_success "Using hosted zone: $HOSTED_ZONE_ID"
+    fi
+
+    provision_certificate
+}
+
 # Function to deploy the main stack
 deploy_stack() {
     log_info "Deploying main orchestrator stack: $STACK_NAME"
@@ -823,6 +902,16 @@ deploy_stack() {
         parameters+=(
             "ParameterKey=LambdaExecutionRoleArn,ParameterValue=$LAMBDA_EXECUTION_ROLE_ARN"
             "ParameterKey=ConfigLambdaRoleArn,ParameterValue=$CONFIG_LAMBDA_ROLE_ARN"
+        )
+    fi
+
+    # When a custom domain is requested, pass the domain, provisioned cert ARN
+    # and hosted zone so the frontend stack enforces TLS 1.2+ and creates DNS.
+    if [ -n "$DOMAIN_NAME" ]; then
+        parameters+=(
+            "ParameterKey=CustomDomainName,ParameterValue=$DOMAIN_NAME"
+            "ParameterKey=AcmCertificateArn,ParameterValue=$ACM_CERT_ARN"
+            "ParameterKey=HostedZoneId,ParameterValue=$HOSTED_ZONE_ID"
         )
     fi
 
@@ -1353,11 +1442,23 @@ delete_stacks() {
         log_info "Templates bucket does not exist: $TEMPLATES_BUCKET"
     fi
     
-    # Step 6: Clean up local build artifacts
+    # Step 6: Delete the ACM certificate stack (us-east-1), if present
+    local cert_stack="aws-ops-wheel-v2-cert-${SUFFIX}"
+    if aws cloudformation describe-stacks --stack-name "$cert_stack" --region "$CERT_REGION" >/dev/null 2>&1; then
+        log_info "Deleting ACM certificate stack: $cert_stack ($CERT_REGION)"
+        aws cloudformation delete-stack --stack-name "$cert_stack" --region "$CERT_REGION"
+        aws cloudformation wait stack-delete-complete --stack-name "$cert_stack" --region "$CERT_REGION" 2>/dev/null \
+            && log_success "Certificate stack deleted: $cert_stack" \
+            || log_warning "Certificate stack deletion did not complete cleanly: $cert_stack"
+    else
+        log_info "No certificate stack to delete: $cert_stack"
+    fi
+
+    # Step 7: Clean up local build artifacts
     log_info "Cleaning up local build artifacts..."
     cleanup_obsolete_build_files
     
-    # Step 7: Clean up all Lambda layers for this suffix
+    # Step 8: Clean up all Lambda layers for this suffix
     log_info "Cleaning up all Lambda layers for suffix: $SUFFIX"
     local suffix_layers=$(aws lambda list-layers --region "$REGION" \
         --query "Layers[?contains(LayerName, 'ops-wheel-v2') && contains(LayerName, '$SUFFIX')].LayerName" \
@@ -1669,6 +1770,7 @@ main() {
     validate_templates
     build_and_upload_lambda_layer
     build_and_upload_lambda_functions
+    setup_custom_domain           # Provision ACM cert (us-east-1) + resolve hosted zone
     deploy_stack
     force_api_gateway_deployment  # NEW: Force API Gateway to apply auth config
     show_outputs
@@ -1747,6 +1849,14 @@ while [[ $# -gt 0 ]]; do
             DISABLE_PUBLIC_SIGNUP=true
             shift
             ;;
+        --domain)
+            DOMAIN_NAME="$2"
+            shift 2
+            ;;
+        --hosted-zone-id)
+            HOSTED_ZONE_ID="$2"
+            shift 2
+            ;;
         --help|-h)
             echo "AWS Ops Wheel v2 Modular Deployment Script"
             echo ""
@@ -1761,6 +1871,10 @@ while [[ $# -gt 0 ]]; do
             echo "  --quick-update           Quick app-only update (skip infrastructure)"
             echo "  --no-iam                 Skip IAM role creation; look up pre-existing roles by name"
             echo "  --no-public-signup       Disable public wheel group creation (self-signup)"
+            echo "  --domain DOMAIN          Custom domain for CloudFront (e.g. opswheel.example.com)."
+            echo "                           Provisions a DNS-validated ACM cert in us-east-1, enforces"
+            echo "                           TLS 1.2+, and creates the Route53 alias record."
+            echo "  --hosted-zone-id ZONE_ID Route53 hosted zone id for --domain (auto-discovered if omitted)"
             echo "  -h, --help               Show this help message"
             echo ""
             echo "Environment Variables:"
@@ -1769,9 +1883,12 @@ while [[ $# -gt 0 ]]; do
             echo "  ADMIN_EMAIL              Same as --admin-email"
             echo "  ADMIN_USERNAME           Same as --admin-username"
             echo "  DISABLE_PUBLIC_SIGNUP    Same as --no-public-signup"
+            echo "  DOMAIN_NAME              Same as --domain"
+            echo "  HOSTED_ZONE_ID           Same as --hosted-zone-id"
             echo ""
             echo "Examples:"
             echo "  $0 --suffix dev --admin-email admin@example.com"
+            echo "  $0 --suffix vonage --region eu-west-1 --domain opswheel.rtc.eu.dev.api.vonagenetworks.net"
             echo "  $0 --quick-update --suffix dev"
             echo "  $0 --delete --suffix dev"
             exit 0

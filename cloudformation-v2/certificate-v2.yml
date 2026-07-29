@@ -1,0 +1,34 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  AWS Ops Wheel v2 - ACM certificate for the CloudFront custom domain.
+  MUST be deployed in us-east-1 (CloudFront only uses certificates from that
+  region). Uses DNS validation; when HostedZoneId is supplied CloudFormation
+  creates the validation records automatically and waits until the certificate
+  is issued. The certificate ARN is exposed as an output for the deploy script
+  to read and pass into the main stack.
+
+Parameters:
+  DomainName:
+    Type: String
+    Description: Fully qualified custom domain for the CloudFront distribution
+                 (e.g. opswheel.rtc.eu.dev.api.vonagenetworks.net).
+
+  HostedZoneId:
+    Type: String
+    Description: Route53 hosted zone ID that owns DomainName. Used to create the
+                 DNS validation records automatically.
+
+Resources:
+  Certificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Ref DomainName
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Ref DomainName
+          HostedZoneId: !Ref HostedZoneId
+
+Outputs:
+  CertificateArn:
+    Description: ARN of the issued ACM certificate (in us-east-1)
+    Value: !Ref Certificate

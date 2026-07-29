@@ -36,8 +36,37 @@ Parameters:
     Default: 'false'
     Description: Whether public wheel group creation is disabled
 
+  # Custom domain / TLS. Kept out of the template on purpose (public repo) - supplied at deploy time.
+  CustomDomainName:
+    Type: String
+    Default: ''
+    Description: >-
+      Optional custom domain (CNAME alias) for the CloudFront distribution, e.g.
+      opswheel.example.com. When set (together with AcmCertificateArn) the
+      distribution serves this domain and enforces a minimum TLS version of
+      1.2. Leave empty to use the default *.cloudfront.net domain (which is
+      locked to the TLSv1 security policy by CloudFront).
+
+  AcmCertificateArn:
+    Type: String
+    Default: ''
+    Description: >-
+      ARN of an ACM certificate that covers CustomDomainName. Must be in
+      us-east-1 (CloudFront requirement). Required when CustomDomainName is set.
+
+  HostedZoneId:
+    Type: String
+    Default: ''
+    Description: >-
+      Optional Route53 hosted zone ID in which to create alias records for
+      CustomDomainName. Leave empty to manage DNS outside this stack.
+
 Conditions:
   CreateConfigLambdaRole: !Equals [!Ref ConfigLambdaRoleArn, '']
+  UseCustomDomain: !Not [!Equals [!Ref CustomDomainName, '']]
+  CreateDnsRecords: !And
+    - !Condition UseCustomDomain
+    - !Not [!Equals [!Ref HostedZoneId, '']]
 
 Resources:
   # =================== FRONTEND S3 + CLOUDFRONT ===================
@@ -173,8 +202,19 @@ Resources:
               OriginProtocolPolicy: https-only
             OriginPath: !Sub "/${Environment}"
         PriceClass: PriceClass_100  # Use only North America and Europe edge locations
-        ViewerCertificate:
-          CloudFrontDefaultCertificate: true
+        # Custom domain alias(es) - only when a custom domain is supplied at deploy time.
+        Aliases: !If
+          - UseCustomDomain
+          - [!Ref CustomDomainName]
+          - !Ref AWS::NoValue
+        ViewerCertificate: !If
+          - UseCustomDomain
+          # Custom ACM cert lets us enforce TLS 1.2+. The default CloudFront
+          # certificate cannot: CloudFront forces its security policy to TLSv1.
+          - AcmCertificateArn: !Ref AcmCertificateArn
+            SslSupportMethod: sni-only
+            MinimumProtocolVersion: TLSv1.2_2021
+          - CloudFrontDefaultCertificate: true
         # SPA routing - redirect 404s to index.production.html
         CustomErrorResponses:
           - ErrorCode: 404
@@ -185,6 +225,33 @@ Resources:
             ResponseCode: 200
             ResponsePagePath: "/app/index.production.html" 
             ErrorCachingMinTTL: 300
+
+  # Route53 alias records for the custom domain -> CloudFront.
+  # Only created when both a custom domain and a hosted zone id are supplied.
+  # Z2FDTNDATAQYW2 is CloudFront's fixed hosted-zone id for alias targets.
+  CustomDomainRecordSet:
+    Type: AWS::Route53::RecordSet
+    Condition: CreateDnsRecords
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref CustomDomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt CloudFrontDistribution.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2
+        EvaluateTargetHealth: false
+
+  CustomDomainRecordSetIPv6:
+    Type: AWS::Route53::RecordSet
+    Condition: CreateDnsRecords
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref CustomDomainName
+      Type: AAAA
+      AliasTarget:
+        DNSName: !GetAtt CloudFrontDistribution.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2
+        EvaluateTargetHealth: false
 
   S3BucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -304,7 +371,10 @@ Outputs:
   
   FrontendURL:
     Description: Secure HTTPS URL for the v2 Multi-tenant Frontend
-    Value: !Sub "https://${CloudFrontDistribution.DomainName}/app"
+    Value: !If
+      - UseCustomDomain
+      - !Sub "https://${CustomDomainName}/app"
+      - !Sub "https://${CloudFrontDistribution.DomainName}/app"
     Export:
       Name: !Sub "${AWS::StackName}-FrontendURL"
 
