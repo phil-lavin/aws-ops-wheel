@@ -150,7 +150,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub 'ops-wheel-v2-tenant-management-${Environment}'
-      Runtime: python3.10
+      Runtime: python3.14
       Handler: index.lambda_handler
       Role: !If [CreateLambdaExecutionRole, !GetAtt LambdaExecutionRole.Arn, !Ref LambdaExecutionRoleArn]
       Timeout: 30
@@ -176,7 +176,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub 'ops-wheel-v2-wheel-operations-${Environment}'
-      Runtime: python3.10
+      Runtime: python3.14
       Handler: index.lambda_handler
       Role: !If [CreateLambdaExecutionRole, !GetAtt LambdaExecutionRole.Arn, !Ref LambdaExecutionRoleArn]
       Timeout: 30
@@ -200,7 +200,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub 'ops-wheel-v2-participant-operations-${Environment}'
-      Runtime: python3.10
+      Runtime: python3.14
       Handler: index.lambda_handler
       Role: !If [CreateLambdaExecutionRole, !GetAtt LambdaExecutionRole.Arn, !Ref LambdaExecutionRoleArn]
       Timeout: 30
@@ -224,7 +224,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub 'ops-wheel-v2-selection-algorithms-${Environment}'
-      Runtime: python3.10
+      Runtime: python3.14
       Handler: index.lambda_handler
       Role: !If [CreateLambdaExecutionRole, !GetAtt LambdaExecutionRole.Arn, !Ref LambdaExecutionRoleArn]
       Timeout: 30
@@ -248,7 +248,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub 'ops-wheel-v2-api-authorizer-${Environment}'
-      Runtime: python3.10
+      Runtime: python3.14
       Handler: authorizer_index.lambda_handler
       Role: !If [CreateLambdaExecutionRole, !GetAtt LambdaExecutionRole.Arn, !Ref LambdaExecutionRoleArn]
       Timeout: 30

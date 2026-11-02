@@ -50,7 +50,7 @@ log_error() {
 install_lambda_layer_dependencies() {
     local target_dir="$1"
     local requirements_file="$2"
-    local container_image="public.ecr.aws/lambda/python:3.10"
+    local container_image="public.ecr.aws/lambda/python:3.14"
     local runtime_platform="linux/amd64"
     local host_os=$(uname -s 2>/dev/null || echo "unknown")
     local host_arch=$(uname -m 2>/dev/null || echo "unknown")
@@ -534,7 +534,7 @@ build_and_upload_lambda_layer() {
             --layer-name "$layer_name" \
             --description "Content-hash layer for AWS Ops Wheel v2 - Hash: $short_hash" \
             --content S3Bucket="$TEMPLATES_BUCKET",S3Key="lambda-layer-v2.zip" \
-            --compatible-runtimes python3.10 \
+            --compatible-runtimes python3.14 \
             --license-info "Apache-2.0" \
             --region "$REGION")
         

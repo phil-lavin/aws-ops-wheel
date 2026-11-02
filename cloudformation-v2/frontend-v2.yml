@@ -274,7 +274,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub 'create-frontend-config-${Environment}'
-      Runtime: python3.10
+      Runtime: python3.14
       Handler: index.lambda_handler
       Role: !If [CreateConfigLambdaRole, !GetAtt ConfigLambdaRole.Arn, !Ref ConfigLambdaRoleArn]
       Code:
