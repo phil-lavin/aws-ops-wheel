@@ -1,0 +1,14 @@
+deploy-v2.sh
+  h_b05af5c56b1cf2 163,529,638
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7ce5492cec17205d93d898fbe3e47d72dca079ff",
+  "prompts": {},
+  "humans": {
+    "h_b05af5c56b1cf2": {
+      "author": "Phil Lavin <phil.lavin@vonage.com>"
+    }
+  }
+}
