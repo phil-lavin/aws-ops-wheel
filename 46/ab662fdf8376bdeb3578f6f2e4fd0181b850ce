@@ -1,0 +1,18 @@
+cloudformation-v2/frontend-v2.yml
+  h_b05af5c56b1cf2 277
+cloudformation-v2/lambda-v2.yml
+  h_b05af5c56b1cf2 153,179,203,227,251
+deploy-v2.sh
+  h_b05af5c56b1cf2 53,537
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "46ab662fdf8376bdeb3578f6f2e4fd0181b850ce",
+  "prompts": {},
+  "humans": {
+    "h_b05af5c56b1cf2": {
+      "author": "Phil Lavin <phil.lavin@vonage.com>"
+    }
+  }
+}
