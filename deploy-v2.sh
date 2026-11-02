@@ -160,7 +160,7 @@ upload_templates() {
     for template in "${templates[@]}"; do
         if [ -f "cloudformation-v2/$template" ]; then
             log_info "Uploading $template..."
-            aws s3 cp "cloudformation-v2/$template" "s3://$TEMPLATES_BUCKET/templates/$template" --expected-bucket-owner "$ACCOUNT_ID" --region $REGION
+            aws s3api put-object --bucket "$TEMPLATES_BUCKET" --key "templates/$template" --body "cloudformation-v2/$template" --expected-bucket-owner "$ACCOUNT_ID" --region $REGION > /dev/null
             log_success "Uploaded $template"
         else
             log_error "Template not found: cloudformation-v2/$template"
@@ -526,7 +526,7 @@ build_and_upload_lambda_layer() {
         
         # Upload to S3
         log_info "Uploading Lambda layer to S3..."
-        aws s3 cp lambda-layer-v2.zip "s3://$TEMPLATES_BUCKET/lambda-layer-v2.zip" --expected-bucket-owner "$ACCOUNT_ID" --region $REGION
+        aws s3api put-object --bucket "$TEMPLATES_BUCKET" --key "lambda-layer-v2.zip" --body lambda-layer-v2.zip --expected-bucket-owner "$ACCOUNT_ID" --region $REGION > /dev/null
         
         # Publish new layer version
         log_info "Publishing new layer version: $layer_name"
@@ -635,7 +635,7 @@ build_and_upload_lambda_functions() {
     for zip_file in "${zip_files[@]}"; do
         if [ -f "$zip_file" ]; then
             log_info "Uploading $zip_file to S3..."
-            aws s3 cp "$zip_file" "s3://$TEMPLATES_BUCKET/$zip_file" --expected-bucket-owner "$ACCOUNT_ID" --region $REGION
+            aws s3api put-object --bucket "$TEMPLATES_BUCKET" --key "$zip_file" --body "$zip_file" --expected-bucket-owner "$ACCOUNT_ID" --region $REGION > /dev/null
             log_success "Uploaded $zip_file"
         else
             log_warning "Lambda function zip file not found, skipping: $zip_file"
